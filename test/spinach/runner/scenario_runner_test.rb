@@ -35,9 +35,14 @@ module Spinach
 
       describe '#run' do
         describe 'hooks' do
+          before(:each) do
+            subject.stubs(:step_definitions).returns step_definitions = stub
+            step_definitions.stubs(:before_each)
+            step_definitions.stubs(:after_each)
+          end
+          
           it 'runs hooks in order' do
             hooks = sequence('hooks')
-            subject.stubs(:step_definitions).returns step_definitions = stub
 
             Spinach.hooks.expects(:run_before_scenario).with(scenario, step_definitions).in_sequence(hooks)
             Spinach.hooks.expects(:run_around_scenario).with(scenario, step_definitions).in_sequence(hooks).yields
@@ -52,6 +57,21 @@ module Spinach
 
             Spinach.hooks.expects(:run_after_scenario).with(scenario, step_definitions).in_sequence(hooks)
 
+            subject.run
+          end
+
+          it "runs before_each before run steps" do
+            before_each = sequence('before_each')
+            subject.stubs(:steps).returns steps = stub
+            step_definitions.expects(:before_each).in_sequence(before_each)
+            steps.expects(:each).in_sequence(before_each)
+            subject.run
+          end
+
+          it "runs after_each after run steps" do
+            after_each = sequence('after_each')
+            Spinach.hooks.expects(:run_after_step).in_sequence(after_each).twice
+            step_definitions.expects(:after_each).in_sequence(after_each)
             subject.run
           end
 
@@ -114,6 +134,25 @@ module Spinach
 
           it 'runs the undefined hooks' do
             Spinach.hooks.expects(:run_on_undefined_step).with(@step, kind_of(Spinach::StepNotDefinedException), @step_definitions)
+            subject.run_step(@step)
+          end
+        end
+
+        describe 'when the step is pending' do
+          before do
+            @step_definitions.
+              stubs(:execute).
+              with(@step).
+              raises Spinach::StepPendingException, @step
+          end
+
+          it 'sets the exception' do
+            subject.run_step(@step)
+            subject.instance_variable_get(:@exception).must_be_kind_of(Spinach::StepPendingException)
+          end
+
+          it 'runs the pending hooks' do
+            Spinach.hooks.expects(:run_on_pending_step).with(@step, kind_of(Spinach::StepPendingException))
             subject.run_step(@step)
           end
         end

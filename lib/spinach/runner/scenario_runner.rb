@@ -47,6 +47,7 @@ module Spinach
         scenario_run = false
         Spinach.hooks.run_around_scenario @scenario, step_definitions do
           scenario_run = true
+          step_definitions.before_each
           steps.each do |step|
             Spinach.hooks.run_before_step step, step_definitions
 
@@ -58,6 +59,7 @@ module Spinach
 
             Spinach.hooks.run_after_step step, step_definitions
           end
+          step_definitions.after_each
         end
         raise "around_scenario hooks *must* yield" if !scenario_run && !@exception
         Spinach.hooks.run_after_scenario @scenario, step_definitions
@@ -80,6 +82,10 @@ module Spinach
       rescue Spinach::StepNotDefinedException => e
         @exception = e
         Spinach.hooks.run_on_undefined_step step, @exception, step_definitions
+      rescue Spinach::StepPendingException => e
+        e.step = step
+        @exception = e
+        Spinach.hooks.run_on_pending_step step, @exception
       rescue Exception => e
         @exception = e
         Spinach.hooks.run_on_error_step step, @exception, step_location, step_definitions
